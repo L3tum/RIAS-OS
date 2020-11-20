@@ -15,6 +15,7 @@ use crate::{
     arch::rias_x86_64::boot::pic,
 };
 use core::ops::{AddAssign, Deref, BitAndAssign};
+use pc_keyboard::HandleControl;
 
 static TICKS_CURRENT_SECOND: spin::Mutex<u32> = spin::Mutex::new(0);
 static SECONDS_SINCE_BOOT: spin::Mutex<u64> = spin::Mutex::new(0);
@@ -74,7 +75,7 @@ extern "x86-interrupt" fn breakpoint_handler(
 // 8
 extern "x86-interrupt" fn double_fault_handler(
     stack_frame: &mut InterruptStackFrame, _error_code: u64)
-{
+-> ! {
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
@@ -122,7 +123,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
 
     lazy_static! {
         static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
-            Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1));
+            Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore));
     }
 
     let mut keyboard = KEYBOARD.lock();

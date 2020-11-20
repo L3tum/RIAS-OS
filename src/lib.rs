@@ -1,9 +1,11 @@
 #![no_std]
 #![feature(abi_x86_interrupt)]
-#![feature(asm)]
+#![feature(llvm_asm)]
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]
 #![feature(alloc_error_handler)]
+#![feature(const_mut_refs)]
+#![feature(const_in_array_repeat_expressions)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
@@ -19,11 +21,7 @@ pub mod drivers {
 pub mod arch;
 pub mod memory;
 pub mod allocator;
-
-use linked_list_allocator::LockedHeap;
-
-#[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
+pub mod config;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
     serial_println!("Running {} tests", tests.len());

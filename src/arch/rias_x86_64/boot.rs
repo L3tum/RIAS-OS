@@ -1,6 +1,8 @@
+use x86::cpuid::CpuId;
+
 use crate::{
+    debug_println,
     println,
-    debug_println
 };
 
 pub mod idt;
@@ -43,7 +45,7 @@ fn get_cpu_name_amd() -> Option<CpuName> {
     let ecx: u32 = 0;
 
     unsafe {
-        asm!("cpuid" : "={eax}"(a),"={ebx}"(b),"={ecx}"(c),"={edx}"(d) : "{eax}"(eax), "{ecx}"(ecx) : "eax","ebx","ecx","edx")
+        llvm_asm!("cpuid" : "={eax}"(a),"={ebx}"(b),"={ecx}"(c),"={edx}"(d) : "{eax}"(eax), "{ecx}"(ecx) : "eax","ebx","ecx","edx")
     }
 
     let mut cpu_name = CpuName { eax: a, ebx: b, ecx: c, edx: d, eax2: 0, ebx2: 0, ecx2: 0, edx2: 0, eax3: 0, ebx3: 0, ecx3: 0, edx3: 0 };
@@ -51,7 +53,7 @@ fn get_cpu_name_amd() -> Option<CpuName> {
     eax = 0x80000003;
 
     unsafe {
-        asm!("cpuid" : "={eax}"(a),"={ebx}"(b),"={ecx}"(c),"={edx}"(d) : "{eax}"(eax), "{ecx}"(ecx) : "eax","ebx","ecx","edx")
+        llvm_asm!("cpuid" : "={eax}"(a),"={ebx}"(b),"={ecx}"(c),"={edx}"(d) : "{eax}"(eax), "{ecx}"(ecx) : "eax","ebx","ecx","edx")
     }
 
     cpu_name.eax2 = a;
@@ -62,7 +64,7 @@ fn get_cpu_name_amd() -> Option<CpuName> {
     eax = 0x80000004;
 
     unsafe {
-        asm!("cpuid" : "={eax}"(a),"={ebx}"(b),"={ecx}"(c),"={edx}"(d) : "{eax}"(eax), "{ecx}"(ecx) : "eax","ebx","ecx","edx")
+        llvm_asm!("cpuid" : "={eax}"(a),"={ebx}"(b),"={ecx}"(c),"={edx}"(d) : "{eax}"(eax), "{ecx}"(ecx) : "eax","ebx","ecx","edx")
     }
 
     cpu_name.eax3 = a;
@@ -97,7 +99,7 @@ impl CpuName {
             let cpu_string_part = self as *const CpuName as *const u8;
             let slice = core::slice::from_raw_parts(cpu_string_part, 3 * 4 * 4);
             let byte_array: &'a [u8] = core::mem::transmute(slice);
-            core::str::from_utf8_unchecked(byte_array)
+            return core::str::from_utf8_unchecked(byte_array);
         }
     }
 }

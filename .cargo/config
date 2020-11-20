@@ -1,5 +1,9 @@
 [build]
-target = "\\\\?\\C:\\Users\\Tom\\source\\repos\\rias_os\\targets\\x86_64.json"
+target = "targets\\x86_64.json"
 
 [target.'cfg(target_os = "none")']
 runner = "bootimage runner"
+
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+build-std-features = ["compiler-builtins-mem"]

@@ -21,12 +21,12 @@ pub fn setup_pic() {
         // TIMER0 | SQUARE WAVE MODE | WRITE WORD
         pit_ctl.write(0x00 | 0x06 | 0x30);
 
-        let timer_reload: u16 = (PIT_BASE_FREQUENCY / TICKS_PER_SECOND) as u16;
+        const TIMER_RELOAD: u16 = (PIT_BASE_FREQUENCY / TICKS_PER_SECOND) as u16;
 
         // TIMER0_CTL
         let mut timer0_ctl: Port<u8> = Port::new(0x40 as u16);
 
-        timer0_ctl.write(((timer_reload & 0xff) as u8));
-        timer0_ctl.write(((timer_reload >> 8) & 0xff) as u8);
+        timer0_ctl.write(((TIMER_RELOAD & 0xff) as u8));
+        timer0_ctl.write(((TIMER_RELOAD >> 8) & 0xff) as u8);
     };
 }

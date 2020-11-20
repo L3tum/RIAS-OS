@@ -1,17 +1,31 @@
-pub const HEAP_START: usize = 0x_4444_4444_0000;
-pub const HEAP_SIZE: usize = 1000 * 1024; // 1 MiB
+use alloc::alloc::{GlobalAlloc, Layout};
+use core::ptr::null_mut;
 
+use linked_list_allocator::LockedHeap;
 use x86_64::{
     structures::paging::{
-        mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
+        FrameAllocator, Mapper, mapper::MapToError, Page, PageTableFlags, Size4KiB,
     },
     VirtAddr,
 };
 
+use crate::allocator::fixed_size_block::FixedSizeBlockAllocator;
+
+pub const HEAP_START: usize = 0x_4444_4444_0000;
+pub const HEAP_SIZE: usize = 1000 * 1024; // 1 MiB
+
+pub mod bump;
+pub mod linked_list;
+pub mod fixed_size_block;
+
+#[global_allocator]
+static ALLOCATOR: Locked<FixedSizeBlockAllocator> =
+    Locked::new(FixedSizeBlockAllocator::new());
+
 pub fn init_heap(
     mapper: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) -> Result<(), MapToError> {
+) -> Result<(), MapToError<Size4KiB>> {
     let page_range = {
         let heap_start = VirtAddr::new(HEAP_START as u64);
         let heap_end = heap_start + HEAP_SIZE - 1u64;
@@ -33,4 +47,39 @@ pub fn init_heap(
     }
 
     Ok(())
+}
+
+/// Align the given address `addr` upwards to alignment `align`.
+///
+/// Requires that `align` is a power of two.
+fn align_up(addr: usize, align: usize) -> usize {
+    (addr + align - 1) & !(align - 1)
+}
+
+pub struct Locked<A> {
+    inner: spin::Mutex<A>,
+}
+
+impl<A> Locked<A> {
+    pub const fn new(inner: A) -> Self {
+        return Locked {
+            inner: spin::Mutex::new(inner),
+        };
+    }
+
+    pub fn lock(&self) -> spin::MutexGuard<A> {
+        return self.inner.lock();
+    }
+}
+
+pub struct Dummy;
+
+unsafe impl GlobalAlloc for Dummy {
+    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
+        null_mut()
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
+        panic!("dealloc should be never called")
+    }
 }
