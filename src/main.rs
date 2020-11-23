@@ -8,17 +8,21 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-
 use core::panic::PanicInfo;
-use rias_os::{
-    arch,
-    println,
-    debug_println,
-    self,
-    memory,
-};
+
 use bootloader::{BootInfo, entry_point};
 use x86_64::VirtAddr;
+
+use rias_os::{
+    self,
+    arch,
+    debug_println,
+    memory,
+    println,
+};
+use rias_os::task::{keyboard, Task};
+use rias_os::task::executor::Executor;
+use rias_os::task::simple_executor::SimpleExecutor;
 
 #[cfg(not(test))] // new attribute
 #[panic_handler]
@@ -54,7 +58,10 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     println!("Hello World!");
 
-    Box::new(1);
+    debug_println!("Starting executor");
+    let mut executor = Executor::new();
+    executor.spawn(Task::new(keyboard::print_keypresses()));
+    executor.run();
 
     end();
 }

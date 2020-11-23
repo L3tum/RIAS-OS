@@ -1,9 +1,10 @@
-use core::alloc::{Layout, GlobalAlloc};
-use core::{ptr, mem};
-use crate::allocator::Locked;
+use core::{mem, ptr};
+use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
-struct ListNode{
+use crate::allocator::Locked;
+
+struct ListNode {
     next: Option<&'static mut ListNode>
 }
 
@@ -12,18 +13,19 @@ struct ListNode{
 /// The sizes must each be power of 2 because they are also used as
 /// the block alignment (alignments must be always powers of 2).
 const BLOCK_SIZES: &[usize] = &[8, 16, 32, 64, 128, 256, 512, 1024, 2048];
-const BLOCK_LIST_LENGTH: i8 = 5;
+const BLOCK_LIST_LENGTH: usize = 5;
 
 /// Choose an appropriate block size for the given layout.
 ///
 /// Returns an index into the `BLOCK_SIZES` array.
 fn list_index(layout: &Layout) -> Option<usize> {
     let required_block_size = layout.size().max(layout.align());
-    return BLOCK_SIZES.iter().position(|&s| s >= required_block_size)
+    return BLOCK_SIZES.iter().position(|&s| s >= required_block_size);
 }
 
 pub struct FixedSizeBlockAllocator {
     list_heads: [Option<&'static mut ListNode>; BLOCK_SIZES.len()],
+    list_length: [usize; BLOCK_SIZES.len()],
     fallback_allocator: linked_list_allocator::Heap,
 }
 
@@ -33,6 +35,7 @@ impl FixedSizeBlockAllocator {
     pub const fn new() -> Self {
         FixedSizeBlockAllocator {
             list_heads: [None; BLOCK_SIZES.len()],
+            list_length: [0; BLOCK_SIZES.len()],
             fallback_allocator: linked_list_allocator::Heap::empty(),
         }
     }
@@ -46,15 +49,17 @@ impl FixedSizeBlockAllocator {
         self.fallback_allocator.init(heap_start, heap_size);
 
         // Preallocate blocks
-        for index in range(0, BLOCK_SIZES.len()) {
-            for i in range(0, BLOCK_LIST_LENGTH) {
+        for index in 0..BLOCK_SIZES.len() {
+            let block_size = BLOCK_SIZES[index];
+            for i in 0..BLOCK_LIST_LENGTH {
                 let new_node = ListNode {
-                    next: allocator.list_heads[index].take(),
+                    next: self.list_heads[index].take(),
                 };
-                let ptr = self.fallback_alloc(Layout::from_size_align(*block_size, *block_size).unwrap())
+                let ptr = self.fallback_alloc(Layout::from_size_align(block_size, block_size).unwrap());
                 let new_node_ptr = ptr as *mut ListNode;
                 new_node_ptr.write(new_node);
                 self.list_heads[index] = Some(&mut *new_node_ptr);
+                self.list_length[index] += 1;
             }
         }
     }
@@ -76,7 +81,8 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                 match allocator.list_heads[index].take() {
                     Some(node) => {
                         allocator.list_heads[index] = node.next.take();
-                        return node as *mut ListNode as *mut u8
+                        allocator.list_length[index] -= 1;
+                        return node as *mut ListNode as *mut u8;
                     }
                     None => {
                         // no block exists in list => allocate new block
@@ -85,7 +91,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                         let block_align = block_size;
                         let layout = Layout::from_size_align(block_size, block_align)
                             .unwrap();
-                        return allocator.fallback_alloc(layout)
+                        return allocator.fallback_alloc(layout);
                     }
                 }
             }
@@ -96,7 +102,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut allocator = self.lock();
         match list_index(&layout) {
-            Some(index) => {
+            Some(index) if allocator.list_length[index] < BLOCK_LIST_LENGTH => {
                 let new_node = ListNode {
                     next: allocator.list_heads[index].take(),
                 };
@@ -106,8 +112,9 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                 let new_node_ptr = ptr as *mut ListNode;
                 new_node_ptr.write(new_node);
                 allocator.list_heads[index] = Some(&mut *new_node_ptr);
+                allocator.list_length[index] += 1;
             }
-            None => {
+            _ => {
                 let ptr = NonNull::new(ptr).unwrap();
                 allocator.fallback_allocator.deallocate(ptr, layout);
             }

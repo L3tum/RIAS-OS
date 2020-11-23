@@ -1,10 +1,11 @@
 use pic8259_simple::ChainedPics;
+use crate::config::DATA;
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 // Hz
 const PIT_BASE_FREQUENCY: u32 = 3579545 / 3;
-pub const TICKS_PER_SECOND: u32 = 100; // tick every 10ms
+const TICKS_PER_SECOND: u32 = DATA.time_interrupt_per_second;
 
 pub static PICS: spin::Mutex<ChainedPics> =
     spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });

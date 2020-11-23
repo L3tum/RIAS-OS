@@ -40,6 +40,7 @@ fn simple_allocation() {
 
 use alloc::vec::Vec;
 use rias_os::allocator::HEAP_SIZE;
+use rias_os::allocator::fixed_size_block::FixedSizeBlockAllocator;
 
 #[test_case]
 fn large_vec() {

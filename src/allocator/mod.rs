@@ -43,7 +43,7 @@ pub fn init_heap(
     }
 
     unsafe {
-        super::ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
     }
 
     Ok(())
@@ -69,17 +69,5 @@ impl<A> Locked<A> {
 
     pub fn lock(&self) -> spin::MutexGuard<A> {
         return self.inner.lock();
-    }
-}
-
-pub struct Dummy;
-
-unsafe impl GlobalAlloc for Dummy {
-    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
-        null_mut()
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        panic!("dealloc should be never called")
     }
 }

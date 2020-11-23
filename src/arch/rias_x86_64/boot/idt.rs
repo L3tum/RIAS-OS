@@ -1,3 +1,7 @@
+use core::ops::{AddAssign, BitAndAssign, Deref};
+
+use lazy_static::lazy_static;
+use pc_keyboard::HandleControl;
 use x86_64::{
     structures::{
         idt::{
@@ -7,15 +11,14 @@ use x86_64::{
         }
     }
 };
-use lazy_static::lazy_static;
+
 use crate::{
-    print,
-    println,
     arch::rias_x86_64::boot::gdt,
     arch::rias_x86_64::boot::pic,
+    print,
+    println,
 };
-use core::ops::{AddAssign, Deref, BitAndAssign};
-use pc_keyboard::HandleControl;
+use crate::config::DATA;
 
 static TICKS_CURRENT_SECOND: spin::Mutex<u32> = spin::Mutex::new(0);
 static SECONDS_SINCE_BOOT: spin::Mutex<u64> = spin::Mutex::new(0);
@@ -75,7 +78,7 @@ extern "x86-interrupt" fn breakpoint_handler(
 // 8
 extern "x86-interrupt" fn double_fault_handler(
     stack_frame: &mut InterruptStackFrame, _error_code: u64)
--> ! {
+    -> ! {
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
@@ -102,7 +105,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(
     TICKS_CURRENT_SECOND.lock().add_assign(1);
     TICKS_SINCE_BOOT.lock().add_assign(1);
 
-    if TICKS_CURRENT_SECOND.lock().ge(&pic::TICKS_PER_SECOND) {
+    if TICKS_CURRENT_SECOND.lock().ge(&DATA.time_interrupt_per_second) {
         SECONDS_SINCE_BOOT.lock().add_assign(1);
         TICKS_CURRENT_SECOND.lock().bitand_assign(0);
     }
@@ -115,29 +118,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
     use x86_64::instructions::port::Port;
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
+    crate::task::keyboard::add_scancode(scancode);
 
     eoi(InterruptIndex::Keyboard.as_u8());
-
-    use pc_keyboard::{Keyboard, ScancodeSet1, DecodedKey, layouts, KeyCode, KeyState};
-    use spin::Mutex;
-
-    lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
-            Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore));
-    }
-
-    let mut keyboard = KEYBOARD.lock();
-
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if key_event.code == KeyCode::P && key_event.state == KeyState::Down {
-            println!("Seconds since boot: {}s", SECONDS_SINCE_BOOT.lock().deref());
-        } else {
-            if let Some(key) = keyboard.process_keyevent(key_event) {
-                match key {
-                    DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
-                }
-            }
-        }
-    }
 }
